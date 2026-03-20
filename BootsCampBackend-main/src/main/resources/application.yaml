@@ -1,0 +1,21 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: demo
+  datasource:
+    # แนะนำให้ใช้ 127.0.0.1 ถ้าฐานข้อมูลอยู่ในเครื่องเดียวกัน
+    url: jdbc:postgresql://10.202.10.33:5432/bootcamp_db
+    username: dev_admin
+    password: systemdbteam3
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      # ถ้าคุณยังไม่ได้สร้างตารางเอง ให้เพื่อนแก้ตรงนี้เป็น update ก่อนชั่วคราวครับ
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true

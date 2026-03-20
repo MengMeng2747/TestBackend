@@ -1,0 +1,18 @@
+services:
+  ## POSTGRESQL
+  postgresql:
+    image: postgres:latest
+    restart: always
+    shm_size: 128mb
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_USER: postgres
+    volumes:
+      # - ./volume/postgresql:/var/lib/postgresql/data
+      - ./script:/docker-entrypoint-initdb.d
+    networks:
+      - local-network
+networks:
+  local-network:
