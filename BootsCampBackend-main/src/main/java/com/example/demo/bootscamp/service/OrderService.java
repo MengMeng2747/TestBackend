@@ -27,20 +27,17 @@ public class OrderService {
                         OrderItemsRepository orderItemsRepository,
                         ResellerProductRepository resellerProductRepository,
                         ShopRepository shopRepository) {
-        this.productRepository = productRepository;
-        this.ordersRepository = ordersRepository;
-        this.orderItemsRepository = orderItemsRepository;
+        this.productRepository         = productRepository;
+        this.ordersRepository          = ordersRepository;
+        this.orderItemsRepository      = orderItemsRepository;
         this.resellerProductRepository = resellerProductRepository;
-        this.shopRepository = shopRepository;
+        this.shopRepository            = shopRepository;
     }
 
-    // =========================
-    // BR-26: สร้าง order
-    // =========================
     @Transactional
     public String createOrder(CreateOrderReq req) {
 
-        BigDecimal total = BigDecimal.ZERO;
+        BigDecimal total          = BigDecimal.ZERO;
         BigDecimal resellerProfit = BigDecimal.ZERO;
 
         ShopEntity shop = shopRepository.findById(Math.toIntExact(req.shop_id))
@@ -48,7 +45,6 @@ public class OrderService {
 
         Integer resellerId = shop.getUserId();
 
-        // CREATE ORDER
         OrdersEntity order = new OrdersEntity();
         String orderNumber = "ORD-" + System.currentTimeMillis();
 
@@ -64,13 +60,10 @@ public class OrderService {
 
         order = ordersRepository.save(order);
 
-        // CREATE ORDER ITEMS
         for (OrderItemReq item : req.items) {
-
             ProductEntity product = productRepository.findById(Math.toIntExact(item.product_id))
                     .orElseThrow(() -> new RuntimeException("ไม่พบสินค้า"));
 
-            // BR-27: เช็ค stock ก่อน
             if (item.quantity > product.getStock()) {
                 throw new RuntimeException("สินค้าไม่เพียงพอ");
             }
@@ -104,34 +97,25 @@ public class OrderService {
         order.setResellerProfit(resellerProfit);
         ordersRepository.save(order);
 
-        // คืน orderNumber ให้ลูกค้าเอาไป track
         return order.getOrderNumber();
     }
 
-    // =========================
-    // BR-28 + BR-29: จ่ายเงิน → ตัดสต็อก (รับ orderNumber)
-    // =========================
     @Transactional
     public String payOrder(String orderNumber) {
 
-        // หา order จาก orderNumber
         OrdersEntity order = ordersRepository.findByOrderNumber(orderNumber)
                 .orElseThrow(() -> new RuntimeException("ไม่พบออเดอร์"));
 
-        // ต้องเป็น pending เท่านั้น
         if (!"pending".equalsIgnoreCase(order.getStatus())) {
             throw new RuntimeException("ออเดอร์นี้ชำระเงินแล้ว");
         }
 
         List<OrderItemsEntity> items = orderItemsRepository.findByOrderId(order.getId());
 
-        // BR-29: ตัดสต็อกทุก item
         for (OrderItemsEntity item : items) {
-
             ProductEntity product = productRepository.findById(item.getProductId())
                     .orElseThrow(() -> new RuntimeException("ไม่พบสินค้า"));
 
-            // เช็ค stock อีกรอบก่อนตัด
             if (item.getQuantity() > product.getStock()) {
                 throw new RuntimeException("สินค้า " + product.getName() + " ไม่เพียงพอ");
             }
@@ -140,21 +124,24 @@ public class OrderService {
             productRepository.save(product);
         }
 
-        // BR-28: status คงเป็น pending รอ Admin จัดส่ง (stock ถูกตัดแล้ว)
-        // ไม่เปลี่ยน status เพราะ pending = รอดำเนินการ, Admin จะเปลี่ยนเป็น shipped เอง
         ordersRepository.save(order);
-
         return order.getOrderNumber();
     }
 
-    // =========================
-    // BR-30 + BR-31: ติดตาม order
-    // =========================
     public TrackOrderRes trackOrder(String orderNumber) {
 
-        // BR-31: ไม่พบ → error
         OrdersEntity order = ordersRepository.findByOrderNumber(orderNumber)
                 .orElseThrow(() -> new RuntimeException("ไม่พบออเดอร์นี้"));
+
+        // ✅ ดึง shopName โดย findById ก่อน ถ้าไม่เจอให้ลอง findByUserId
+        String shopName = shopRepository.findById(order.getShopId())
+                .map(ShopEntity::getShopName)
+                .orElseGet(() ->
+                        // fallback: หาจาก userId ถ้า shopId ใน order เป็น userId แทน
+                        shopRepository.findByUserId(order.getShopId())
+                                .map(ShopEntity::getShopName)
+                                .orElse("—")
+                );
 
         List<OrderItemsEntity> items = orderItemsRepository.findByOrderId(order.getId());
 
@@ -166,7 +153,6 @@ public class OrderService {
                 ))
                 .collect(Collectors.toList());
 
-        // BR-30: คืนข้อมูล order ครบ
         return new TrackOrderRes(
                 order.getOrderNumber(),
                 order.getCustomerName(),
@@ -175,6 +161,7 @@ public class OrderService {
                 order.getStatus(),
                 order.getTotalAmount(),
                 order.getCreatedAt(),
+                shopName,
                 itemResList
         );
     }
