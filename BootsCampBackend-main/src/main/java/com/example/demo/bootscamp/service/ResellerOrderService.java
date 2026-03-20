@@ -29,39 +29,43 @@ public class ResellerOrderService {
 
         return orders.stream().map(o -> {
 
-            // ดึง items ของแต่ละ order
             List<OrderItemsEntity> items = orderItemsRepository.findByOrderId(o.getId());
 
-            // รวมชื่อสินค้าทั้งหมด
+            // ✅ productName รวมทุก item สำหรับแสดงในตาราง
             String productName = items.stream()
                     .map(i -> i.getProductName() + " ×" + i.getQuantity())
                     .collect(Collectors.joining(", "));
 
-            // จำนวนรวม
-            int totalQty = items.stream()
-                    .mapToInt(OrderItemsEntity::getQuantity)
-                    .sum();
+            int totalQty = items.stream().mapToInt(OrderItemsEntity::getQuantity).sum();
 
-            // ราคาขายของ item แรก (ใช้แสดงราคา/ชิ้น)
             BigDecimal sellingPrice = items.isEmpty()
                     ? BigDecimal.ZERO
                     : items.get(0).getSellingPrice();
 
-            // วันที่สั่งซื้อจริง
-            String createdAt = o.getCreatedAt() != null
-                    ? o.getCreatedAt().toString()
-                    : null;
+            String createdAt = o.getCreatedAt() != null ? o.getCreatedAt().toString() : null;
+
+            // ✅ แปลง items เป็น ResellerOrderItemRes
+            List<ResellerOrderRes.ResellerOrderItemRes> itemResList = items.stream()
+                    .map(i -> new ResellerOrderRes.ResellerOrderItemRes(
+                            i.getProductName(),
+                            i.getQuantity(),
+                            i.getSellingPrice()
+                    ))
+                    .collect(Collectors.toList());
 
             return new ResellerOrderRes(
                     o.getId(),
-                    o.getOrderNumber(),        // ← เลขออเดอร์จริง
+                    o.getOrderNumber(),
                     o.getCustomerName(),
+                    o.getCustomerPhone(),      // ✅ เบอร์โทร
+                    o.getShippingAddress(),    // ✅ ที่อยู่จัดส่ง
                     productName.isEmpty() ? null : productName,
                     totalQty,
                     sellingPrice,
-                    o.getTotalAmount(),        // ← ยอดขายรวม
+                    o.getTotalAmount(),
                     o.getStatus(),
-                    createdAt                  // ← วันที่จริง
+                    createdAt,
+                    itemResList                // ✅ รายการสินค้า
             );
         }).collect(Collectors.toList());
     }

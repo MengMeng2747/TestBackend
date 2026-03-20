@@ -32,11 +32,27 @@ public class AdminOrderService {
         this.shopRepository      = shopRepository;
     }
 
-    // ── helper: OrdersEntity → OrderRes (join shopName) ──────────────────────
+    // ── helper: แปลง OrderItemsEntity → OrderItemRes ─────────────────────────
+    private List<OrderRes.OrderItemRes> toItemRes(Integer orderId) {
+        return orderItemRepository.findByOrderId(orderId)
+                .stream()
+                .map(i -> new OrderRes.OrderItemRes(
+                        i.getProductName(),
+                        i.getQuantity(),
+                        i.getSellingPrice(),
+                        i.getCostPrice()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    // ── helper: OrdersEntity → OrderRes ──────────────────────────────────────
     private OrderRes toRes(OrdersEntity o) {
         String shopName = shopRepository.findById(o.getShopId())
                 .map(ShopEntity::getShopName)
                 .orElse("Shop #" + o.getShopId());
+
+        // ✅ ดึง items มาด้วย
+        List<OrderRes.OrderItemRes> items = toItemRes(o.getId());
 
         return new OrderRes(
                 o.getId(),
@@ -49,13 +65,12 @@ public class AdminOrderService {
                 o.getTotalAmount(),
                 o.getResellerProfit(),
                 o.getStatus(),
-                o.getCreatedAt()
+                o.getCreatedAt(),
+                items // ✅ ส่ง items ไปด้วย
         );
     }
 
-    // =========================
-    // GET ALL ORDERS — ส่ง OrderRes พร้อม shopName
-    // =========================
+    // GET ALL ORDERS
     public List<OrderRes> getAllOrders() {
         return orderRepository.findAll()
                 .stream()
@@ -63,9 +78,7 @@ public class AdminOrderService {
                 .collect(Collectors.toList());
     }
 
-    // =========================
-    // SHIP ORDER (pending → shipped) — BR-10
-    // =========================
+    // SHIP ORDER (pending → shipped) BR-10
     @Transactional
     public OrderRes shipOrder(Long orderId) {
 
@@ -95,11 +108,9 @@ public class AdminOrderService {
         WalletEntity wallet = walletRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("ไม่พบ wallet"));
 
-        // บวกกำไรเข้า wallet (BR-10)
         wallet.setBalance(wallet.getBalance().add(totalProfit));
         walletRepository.save(wallet);
 
-        // บันทึก wallet log
         WalletLogEntity log = new WalletLogEntity();
         log.setWalletId(wallet.getId());
         log.setOrderId(order.getId());
@@ -113,9 +124,7 @@ public class AdminOrderService {
         return toRes(orderRepository.save(order));
     }
 
-    // =========================
     // COMPLETE ORDER (shipped → completed)
-    // =========================
     @Transactional
     public OrderRes completeOrder(Long orderId) {
 
